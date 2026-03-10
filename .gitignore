@@ -1,4 +1,19 @@
-__pycache__
-*.csv
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# IDE
 .idea
+
+# Chrome Driver
+chromedriver
+chromedriver.exe
+
+# Datos del Bot (Para no subir tus contactos)
+*.csv
+logs/
+*.log
 config.json
