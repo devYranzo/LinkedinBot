@@ -17,6 +17,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
 # --- Configuration ---
 ctk.set_appearance_mode("System")
@@ -55,7 +56,7 @@ class LinkedInBotApp(ctk.CTk):
                                        font=ctk.CTkFont(size=34, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=20)
 
-        # Botones de navegación (con sus iconos)
+        # Botones de navegación
         self.connectIcon = self.cargar_icono("customer-insight")
         self.btn_connect = ctk.CTkButton(self.sidebar_frame, text="Connect People", text_color=("black", "white"),
                                          anchor="w", fg_color="transparent", hover_color="#333333", height=40,
@@ -102,10 +103,9 @@ class LinkedInBotApp(ctk.CTk):
         self.setup_config_ui()
 
         # TERMINAL
-        self.terminal = ctk.CTkTextbox(self.right_container, height=200, border_width=1)
+        self.terminal = ctk.CTkTextbox(self.right_container, height=200, border_width=1, state="disabled")
         self.terminal.grid(row=1, column=0, sticky="ew", pady=(10, 0))
 
-        # 4. AHORA SÍ: RELLENAR LOS CAMPOS (Porque ya existen)
         if self.email_guardado:
             self.entry_email.insert(0, self.email_guardado)
 
@@ -190,48 +190,102 @@ class LinkedInBotApp(ctk.CTk):
     # UI SETUP
     # ==============================================================================
     def setup_connect_ui(self):
-        self.conn_label = ctk.CTkLabel(self.connect_frame, text="Procesar Lista de Contactos (CSV)",
+        self.conn_label = ctk.CTkLabel(self.connect_frame, text="Connect with people",
                                        font=ctk.CTkFont(size=22, weight="bold"))
-        self.conn_label.pack(pady=(20, 10))
+        self.conn_label.pack(pady=(20, 5))
 
-        # --- NUEVO: Campo para mostrar la ruta del archivo ---
+        self.conn_sub_label = ctk.CTkLabel(self.connect_frame, text="Upload the CSV file you got on Search People",
+                                           text_color="gray", font=ctk.CTkFont(size=15))
+        self.conn_sub_label.pack(pady=(5, 10))
+
         # Creamos un contenedor para que el Entry y el botón de buscar estén en la misma línea
         path_frame = ctk.CTkFrame(self.connect_frame, fg_color="transparent")
-        path_frame.pack(pady=10, padx=20, fill="x")
+        path_frame.pack(pady=20)
 
-        # DEFINICIÓN IMPORTANTE: self.entry_csv_path
-        self.entry_csv_path = ctk.CTkEntry(path_frame, placeholder_text="No file selected", height=40)
-        self.entry_csv_path.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.entry_csv_path = ctk.CTkEntry(
+            path_frame,
+            placeholder_text="No file selected",
+            width=300,
+            height=40,
+            state="readonly"
+        )
+        self.entry_csv_path.pack(side="left", padx=(0, 10))
 
-        self.btn_browse = ctk.CTkButton(path_frame, text="Examine...", height=40, width=100, command=self.load_csv)
-        self.btn_browse.pack(side="right")
+        self.btn_browse = ctk.CTkButton(
+            path_frame,
+            text="Examine...",
+            height=40,
+            width=100,
+            command=self.load_csv
+        )
+        self.btn_browse.pack(side="left")
 
-        # Inicializamos la variable que usabas antes por si acaso
         self.csv_path = None
 
         # Botón de ejecución
-        self.btn_run_csv = ctk.CTkButton(self.connect_frame, text="🚀 Start Processing", fg_color="#28a745",
-                                         hover_color="#218838", height=50, font=ctk.CTkFont(weight="bold"),
+        self.btn_run_csv = ctk.CTkButton(self.connect_frame, text="Start Processing", height=40,
+                                         font=ctk.CTkFont(weight="bold"),
                                          command=lambda: threading.Thread(target=self.run_csv_process).start())
         self.btn_run_csv.pack(pady=30)
 
     def setup_people_ui(self):
-        ctk.CTkLabel(self.people_frame, text="Buscador de Personas", font=ctk.CTkFont(size=18)).pack(pady=10)
+        self.search_label = ctk.CTkLabel(self.people_frame, text="Find People on LinkedIn",
+                                         font=ctk.CTkFont(size=22, weight="bold"))
+        self.search_label.pack(pady=(20, 5))
+
+        self.search_sub_label = ctk.CTkLabel(self.people_frame, text="Introduce role to be searched",
+                                             text_color="gray", font=ctk.CTkFont(size=15))
+        self.search_sub_label.pack(pady=(5, 10))
+
         self.entry_p_search = ctk.CTkEntry(self.people_frame, placeholder_text="Puesto (ej: CTO Malta)", width=300,
                                            height=40)
         self.entry_p_search.pack(pady=5)
-        self.slider_pages = ctk.CTkSlider(self.people_frame, from_=1, to=10, number_of_steps=9)
-        self.slider_pages.pack(pady=10)
+
+        # Creamos el Label que mostrará el número
+        self.label_slider_value = ctk.CTkLabel(self.people_frame, text="Pages to extract: 3",
+                                               font=ctk.CTkFont(size=14))
+        self.label_slider_value.pack(pady=(10, 0))
+
+        # Definimos la función que actualiza el texto del label
+        def actualizar_numero_paginas(valor):
+            self.label_slider_value.configure(text=f"Pages to extract: {int(valor)}")
+
+        # Añadimos el slider con el comando de actualización
+        self.slider_pages = ctk.CTkSlider(self.people_frame, from_=1, to=10,
+                                          number_of_steps=9, width=300 , height=20,
+                                          command=actualizar_numero_paginas)
+        self.slider_pages.set(3)  # Valor por defecto
+        self.slider_pages.pack(pady=(5, 10))
+
         self.btn_run_people = ctk.CTkButton(self.people_frame, text="Extraer Perfiles", height=40,
                                             command=lambda: threading.Thread(target=self.run_people_search).start())
         self.btn_run_people.pack(pady=10)
 
     def setup_jobs_ui(self):
-        ctk.CTkLabel(self.jobs_frame, text="Buscador de Vacantes", font=ctk.CTkFont(size=18)).pack(pady=10)
+        self.vacancies_label = ctk.CTkLabel(self.jobs_frame, text="Find Vacants on LinkedIn",
+                                         font=ctk.CTkFont(size=22, weight="bold"))
+        self.vacancies_label.pack(pady=(20, 5))
+
+        self.vacancies_sub_label = ctk.CTkLabel(self.jobs_frame, text="Introduce role to be searched",
+                                             text_color="gray", font=ctk.CTkFont(size=15))
+        self.vacancies_sub_label.pack(pady=(5, 10))
+
         self.entry_j_search = ctk.CTkEntry(self.jobs_frame, placeholder_text="Software Engineer", width=300, height=40)
         self.entry_j_search.pack(pady=5)
-        self.combo_pais = ctk.CTkComboBox(self.jobs_frame, values=list(GEOIDS.keys()), height=40)
-        self.combo_pais.pack(pady=10)
+
+
+        self.combo_pais = ctk.CTkOptionMenu(
+            self.jobs_frame,
+            values=list(GEOIDS.keys()),
+            width=300,
+            height=40,
+            dynamic_resizing=False,
+            fg_color="#3b3b3b",
+            button_color="#2b2b2b",
+            button_hover_color="#4b4b4b",
+        )
+        self.combo_pais.pack(pady=20)
+
         self.btn_run_jobs = ctk.CTkButton(self.jobs_frame, text="Buscar Empleos", height=40,
                                           command=lambda: threading.Thread(target=self.run_job_search).start())
         self.btn_run_jobs.pack(pady=10)
@@ -285,7 +339,6 @@ class LinkedInBotApp(ctk.CTk):
     @staticmethod
     def iniciar_driver():
         options = uc.ChromeOptions()
-        # (Same options as your original script)
         options.add_argument("--window-size=1280,900")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--start-maximized")
@@ -301,11 +354,17 @@ class LinkedInBotApp(ctk.CTk):
             return driver
 
     def escribir_log(self, mensaje):
-        try:
-            self.terminal.insert("end", f"[{time.strftime('%H:%M:%S')}] {mensaje}\n")
-            self.terminal.see("end")
-        except Exception as e:
-            print(f"Error escribiendo en terminal: {e}")
+        timestamp = time.strftime("%H:%M:%S")
+        nuevo_mensaje = f"[{timestamp}] {mensaje}\n"
+
+        self.terminal.configure(state="normal")
+        self.terminal.insert("end", nuevo_mensaje)
+        self.terminal.see("end")
+
+        self.terminal.configure(state="disabled")
+
+        # Forzar actualización de la interfaz (opcional pero recomendado)
+        self.update_idletasks()
 
     def seleccionar_carpeta(self):
         carpeta = filedialog.askdirectory(initialdir=self.ruta_guardado, title="Select where you want to save the CSV")
@@ -388,24 +447,35 @@ class LinkedInBotApp(ctk.CTk):
             filetypes=[("Archivos CSV", "*.csv")])
         if path:
             self.csv_path = path
+
+            # 1. Habilitamos para permitir la edición por código
+            self.entry_csv_path.configure(state="normal")
+
+            # 2. Limpiamos e insertamos la nueva ruta
             self.entry_csv_path.delete(0, "end")
             self.entry_csv_path.insert(0, path)
-            self.escribir_log(f"📂 Archivo cargado: {os.path.basename(path)}")
+
+            self.entry_csv_path.xview_moveto(1.0)
+
+            # 3. Volvemos a bloquear para que el usuario no toque nada
+            self.entry_csv_path.configure(state="readonly")
+
+            self.escribir_log(f"Archivo cargado: {os.path.basename(path)}")
 
     def run_csv_process(self):
         """Proceso principal de conexión masiva desde CSV."""
         ruta = self.entry_csv_path.get()
         if not ruta or not os.path.exists(ruta):
-            self.escribir_log("❌ Error: Selecciona un archivo CSV válido.")
+            self.escribir_log("Error: Selecciona un archivo CSV válido.")
             return
 
-        self.escribir_log("🚀 Iniciando navegador para conectar...")
+        self.escribir_log("Iniciando navegador para conectar...")
         driver = self.iniciar_driver()
         if not driver: return
 
         try:
             if self.login_proceso(driver):
-                self.escribir_log("✅ Login exitoso. Procesando lista...")
+                self.escribir_log("Login exitoso. Procesando lista...")
 
                 with open(ruta, mode='r', encoding='utf-8-sig') as f:
                     reader = csv.DictReader(f)
@@ -420,10 +490,10 @@ class LinkedInBotApp(ctk.CTk):
                             'Nombre Completo') or "Contacto"
 
                         if not url or "http" not in str(url):
-                            self.escribir_log(f"⚠️ Saltando fila: URL no válida.")
+                            self.escribir_log(f"Saltando fila: URL no válida.")
                             continue
 
-                        self.escribir_log(f"👤 Visitando a: {nombre}")
+                        self.escribir_log(f"Visitando a: {nombre}")
                         driver.get(url)
                         time.sleep(random.uniform(5, 7))
 
@@ -431,22 +501,20 @@ class LinkedInBotApp(ctk.CTk):
                         conectado = self.buscar_y_clicar_js(driver, ["conectar", "connect"])
 
                         if not conectado:
-                            self.escribir_log("   🔍 Buscando en menú 'Más'...")
+                            self.escribir_log("Buscando en menú 'Más'...")
                             if self.buscar_y_clicar_js(driver, ["más...", "more...", "más"]):
                                 time.sleep(1.5)
                                 conectado = self.buscar_y_clicar_js(driver, ["conectar", "connect"])
 
                         # 2. PASO: CONFIRMACIÓN FINAL (NAVEGACIÓN POR TABS)
                         if conectado:
-                            self.escribir_log("   ↳ Modal detectada. Navegando con TAB al botón...")
+                            self.escribir_log("Modal detectada. Navegando con TAB al botón...")
                             time.sleep(3.5)
 
                             try:
-                                from selenium.webdriver.common.action_chains import ActionChains
                                 actions = ActionChains(driver)
 
-                                # 1. Pulsamos TAB dos veces para saltar de la Modal/Nota al botón 'Enviar sin nota'
-                                # (Normalmente es 1 o 2 veces dependiendo de dónde empiece el foco)
+                                # 1. Pulsamos TAB tres veces para saltar de la Modal/Nota al botón 'Enviar sin nota'
                                 actions.send_keys(Keys.TAB)
                                 time.sleep(0.5)
                                 actions.send_keys(Keys.TAB)
@@ -458,16 +526,16 @@ class LinkedInBotApp(ctk.CTk):
                                 actions.send_keys(Keys.ENTER)
                                 actions.perform()
 
-                                # 3. Intento extra con ESPACIO (a veces el ENTER no dispara botones en JS)
+                                # 3. Intento extra con ESPACIO
                                 time.sleep(0.5)
                                 actions.send_keys(Keys.SPACE)
                                 actions.perform()
 
-                                self.escribir_log(f"   ✅ Comandos de Tabulación + Enter enviados.")
+                                self.escribir_log(f"Comandos de Tabulación + Enter enviados.")
 
                             except Exception as e:
-                                self.escribir_log(f"   ❌ Fallo en navegación TAB: {str(e)}")
-                                # Limpieza por si acaso
+                                self.escribir_log(f"Fallo en navegación TAB: {str(e)}")
+                                # Limpieza
                                 try:
                                     ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                                 except:
@@ -477,18 +545,16 @@ class LinkedInBotApp(ctk.CTk):
 
                         # Pausa de seguridad entre contactos
                         espera = random.uniform(10, 18)
-                        self.escribir_log(f"⏳ Esperando {int(espera)}s para el siguiente...")
+                        self.escribir_log(f"Esperando {int(espera)}s para el siguiente...")
                         time.sleep(espera)
 
-                self.escribir_log("🏁 Proceso de CSV finalizado.")
-                if hasattr(self, 'mostrar_notificacion_temporal'):
-                    self.mostrar_notificacion_temporal("Éxito", "Lista procesada correctamente.")
+                self.escribir_log("Proceso de CSV finalizado.")
 
         except Exception as e:
-            self.escribir_log(f"❌ Error crítico: {str(e)}")
+            self.escribir_log(f"Error crítico: {str(e)}")
         finally:
             driver.quit()
-            self.escribir_log("🔒 Sesión cerrada.")
+            self.escribir_log("Sesión cerrada.")
 
     def run_people_search(self):
         # 1. Obtener datos de la interfaz
