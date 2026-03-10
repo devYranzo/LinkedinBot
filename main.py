@@ -35,7 +35,7 @@ class LinkedInBotApp(ctk.CTk):
         self.ruta_guardado = os.getcwd()
         self.email_guardado = ""
 
-        # 2. Cargar datos del archivo (Solo carga las variables, no toca la UI)
+        # 2. Cargar datos del archivo
         self.cargar_configuracion()
 
         # 3. Configuración del Grid Principal
@@ -54,7 +54,7 @@ class LinkedInBotApp(ctk.CTk):
 
         # Botones de navegación (con sus iconos)
         self.connectIcon = self.cargar_icono("customer-insight")
-        self.btn_connect = ctk.CTkButton(self.sidebar_frame, text="Connect (CSV)", text_color=("black", "white"),
+        self.btn_connect = ctk.CTkButton(self.sidebar_frame, text="Connect People", text_color=("black", "white"),
                                          anchor="w", fg_color="transparent", hover_color="#333333", height=40,
                                          cursor="hand2", image=self.connectIcon,
                                          command=lambda: self.select_frame("connect"))
@@ -78,7 +78,7 @@ class LinkedInBotApp(ctk.CTk):
                                         anchor="w", fg_color="transparent", hover_color="#333333", height=40,
                                         cursor="hand2", image=self.configIcon,
                                         command=lambda: self.select_frame("config"))
-        self.btn_config.grid(row=5, column=0, padx=10, pady=5, sticky="ew")
+        self.btn_config.grid(row=5, column=0, padx=10, pady=10, sticky="ew")
 
         # --- CONTENEDOR DERECHO ---
         self.right_container = ctk.CTkFrame(self, fg_color="transparent")
@@ -92,7 +92,7 @@ class LinkedInBotApp(ctk.CTk):
         self.jobs_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
         self.config_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
 
-        # CREAR LA UI (Esto define self.entry_email, etc.)
+        # CREAR LA UI
         self.setup_connect_ui()
         self.setup_people_ui()
         self.setup_jobs_ui()
@@ -144,7 +144,8 @@ class LinkedInBotApp(ctk.CTk):
         elif name == "config":
             self.config_frame.grid(row=0, column=0, sticky="nsew")
 
-    def cargar_icono(self, nombre_base, size=(20, 20)):
+    @staticmethod
+    def cargar_icono(nombre_base, size=(20, 20)):
         """
         Carga automáticamente versiones light y dark.
         Ejemplo: nombre_base="search" -> busca "search-light.png" y "search-dark.png"
@@ -226,16 +227,11 @@ class LinkedInBotApp(ctk.CTk):
         self.job_status_label.pack(pady=5)
 
     def setup_config_ui(self):
-        # --- Configuración de cuenta ---
+        # --- TÍTULO PRINCIPAL ---
+        ctk.CTkLabel(self.config_frame, text="LinkedIn Account",
+                     font=ctk.CTkFont(size=18, weight="bold")).pack(fill="x", pady=(20, 10))
 
-        # Título principal
-        ctk.CTkLabel(self.config_frame, text="Account Configuration", font=ctk.CTkFont(size=22, weight="bold")).pack(
-            pady=(20, 10))
-
-        ctk.CTkLabel(self.config_frame, text="Introduce LinkedIn account credentials to use",
-            text_color="gray").pack(pady=(0, 30))
-
-        # Contenedor central para el formulario
+        # --- CONTENEDOR PARA CREDENCIALES ---
         form_inner = ctk.CTkFrame(self.config_frame, fg_color="transparent")
         form_inner.pack(pady=10)
 
@@ -249,34 +245,39 @@ class LinkedInBotApp(ctk.CTk):
         self.entry_pass = ctk.CTkEntry(form_inner, placeholder_text="••••••••", show="*", width=350, height=40)
         self.entry_pass.pack(pady=(5, 15))
 
-        # Botón de Guardar
-        self.btn_save = ctk.CTkButton(form_inner, text="Save", height=40, fg_color="#0077B5", command=self.guardar_configuracion)
-        self.btn_save.pack(pady=20)
+        # --- TÍTULO SECCIÓN DIRECTORIO ---
+        ctk.CTkLabel(form_inner, text="Saves Directory Location",
+                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10), fill="x")
 
-        # --- Configuracion de ubicacion de guardar ---
-        ctk.CTkLabel(form_inner, text="Save file on:", anchor="w").pack(fill="x", padx=5, pady=(15, 0))
+        ctk.CTkLabel(form_inner, text="Save file on:", anchor="w").pack(fill="x", padx=5)
 
         # Frame para agrupar la entrada y el botón de búsqueda
         folder_frame = ctk.CTkFrame(form_inner, fg_color="transparent")
         folder_frame.pack(fill="x", pady=5)
 
-        self.entry_folder = ctk.CTkEntry(folder_frame, placeholder_text="Selecciona carpeta...", width=270)
-        self.entry_folder.insert(0, self.ruta_guardado)
+        self.entry_folder = ctk.CTkEntry(folder_frame, placeholder_text="Selecciona carpeta...", width=260, height=40)
         self.entry_folder.pack(side="left", padx=(0, 5))
 
         self.btn_browse_folder = ctk.CTkButton(
             folder_frame,
             text="Examine...",
-            width=40,
+            width=80,
+            height=40,
             cursor="hand2",
             command=self.seleccionar_carpeta
         )
         self.btn_browse_folder.pack(side="left")
 
+        # --- BOTÓN GUARDAR ---
+        self.btn_save = ctk.CTkButton(form_inner, text="Save Settings", height=45,
+                                      fg_color="#0077B5", command=self.guardar_configuracion)
+        self.btn_save.pack(pady=30)
+
     # ==============================================================================
-    # CORE LOGIC (PORTED FROM YOUR SCRIPT)
+    # CORE LOGIC
     # ==============================================================================
-    def iniciar_driver(self):
+    @staticmethod
+    def iniciar_driver():
         options = uc.ChromeOptions()
         # (Same options as your original script)
         options.add_argument("--window-size=1280,900")
@@ -330,7 +331,8 @@ class LinkedInBotApp(ctk.CTk):
             self.escribir_log(f"Error Login: {e}")
             return False
 
-    def buscar_y_clicar_js(self, driver, palabras_clave, intentar_clic=True):
+    @staticmethod
+    def buscar_y_clicar_js(driver, palabras_clave, intentar_clic=True):
         script = """
         var keywords = arguments[0];
         var click    = arguments[1];
@@ -385,13 +387,105 @@ class LinkedInBotApp(ctk.CTk):
         self.escribir_log("Proceso Finalizado")
 
     def run_people_search(self):
-        keyword = self.entry_p_search.get()
-        paginas = int(self.slider_pages.get())
-        self.escribir_log(f"Buscando {keyword}...")
+        # 1. Obtener datos de la interfaz
+        keyword_p = self.entry_p_search.get()
+        paginas = 2
+
+        user_email = self.entry_email.get()
+        user_pass = self.entry_pass.get()
+
+        if not user_email or not user_pass:
+            self.escribir_log("Error: Configura tus credenciales primero.")
+            return
+
         driver = self.iniciar_driver()
-        if self.login_proceso(driver):
-            self.escribir_log("Funcionalidad de extracción en proceso...")
-        driver.quit()
+        if not driver: return
+
+        try:
+            if self.login_proceso(driver):
+                leads_finales = []
+                enlaces_vistos = set()
+
+                for p in range(1, paginas + 1):
+                    url = f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote(keyword_p)}&page={p}"
+                    self.escribir_log(f"Escaneando página {p} de {paginas}...")
+                    driver.get(url)
+                    time.sleep(5)
+
+                    # Scroll progresivo para cargar imágenes y datos
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(2)
+
+                    # Seleccionamos las tarjetas
+                    items = driver.find_elements(By.CSS_SELECTOR, "[role='listitem']")
+                    self.escribir_log(f"Detectados {len(items)} elementos en la página.")
+
+                    for item in items:
+                        try:
+                            # 1. Extraer Enlace y Nombre
+                            enlace_el = item.find_element(By.CSS_SELECTOR,
+                                                          "a[data-view-name='search-result-lockup-title']")
+                            link = enlace_el.get_attribute("href").split("?")[0]
+
+                            if link in enlaces_vistos: continue
+                            nombre = enlace_el.text.strip()
+
+                            # 2. Extraer párrafos para Cargo, Empresa y Ubicación
+                            parrafos = item.find_elements(By.TAG_NAME, "p")
+
+                            cargo = "N/A"
+                            ubicacion = "N/A"
+                            empresa_solo = "N/A"
+                            textos_secundarios = []
+
+                            for p_tag in parrafos:
+                                txt = p_tag.text.strip()
+                                if not txt or txt == nombre or "Conectar" in txt:
+                                    continue
+
+                                # Lógica de limpieza de Empresa
+                                if "Actual:" in txt:
+                                    frase_completa = txt.replace("Actual:", "").strip()
+                                    # Split por conectores usando Regex
+                                    partes = re.split(r'\s+en\s+|\s+at\s+|\s+@\s+', frase_completa, flags=re.IGNORECASE)
+                                    empresa_solo = partes[-1].strip() if len(partes) > 1 else frase_completa
+                                else:
+                                    textos_secundarios.append(txt)
+
+                            # Asignación de Cargo y Ubicación
+                            if len(textos_secundarios) > 1:
+                                cargo = textos_secundarios[1]
+                            if len(textos_secundarios) > 2:
+                                ubicacion = textos_secundarios[2]
+
+                            if len(nombre) > 2:
+                                leads_finales.append({
+                                    "Nombre Completo": nombre,
+                                    "Cargo": cargo,
+                                    "Empresa": empresa_solo,
+                                    "Ubicación": ubicacion,
+                                    "Perfil LinkedIn": link
+                                })
+                                enlaces_vistos.add(link)
+                        except:
+                            continue
+
+                # --- GUARDADO AUTOMÁTICO ---
+                if leads_finales:
+                    df = pd.DataFrame(leads_finales)
+                    nombre_archivo = f"Leads_{keyword_p.replace(' ', '_')}.csv"
+                    ruta_final = os.path.join(self.ruta_guardado, nombre_archivo)
+
+                    df.to_csv(ruta_final, index=False, encoding='utf-8-sig')
+
+                    self.escribir_log(f"¡Hecho! {len(df)} perfiles únicos guardados.")
+                    self.escribir_log(f"Guardado: {nombre_archivo}")
+                else:
+                    self.escribir_log("No se capturaron datos. Revisa el navegador.")
+
+        finally:
+            driver.quit()
+            self.escribir_log("Sesión de búsqueda finalizada.")
 
     def run_job_search(self):
         # 1. Obtener datos de la UI
