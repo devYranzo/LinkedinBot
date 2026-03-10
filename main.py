@@ -1,20 +1,22 @@
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import threading
-import undetected_chromedriver as uc
-import pandas as pd
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.common.by import By
-from PIL import Image
-import time
-import random
 import csv
-import urllib.parse
-import re
-import os
 import json
+import os
+import random
+import re
+import threading
+import time
+import urllib.parse
+from tkinter import filedialog
+
+import customtkinter as ctk
 import keyring
+import pandas as pd
+import undetected_chromedriver as uc
+from PIL import Image
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.keys import Keys
 
 # --- Configuration ---
 ctk.set_appearance_mode("System")
@@ -27,6 +29,7 @@ class LinkedInBotApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        self.entry_csv_path = None
         self.title("LinkedIn Bot")
         self.geometry("1100x750")
 
@@ -116,12 +119,8 @@ class LinkedInBotApp(ctk.CTk):
         self.select_frame("connect")
 
     def select_frame(self, name):
-        botones = {
-            "connect": self.btn_connect,
-            "people": self.btn_people,
-            "jobs": self.btn_jobs,
-            "config": self.btn_config
-        }
+        botones = {"connect": self.btn_connect, "people": self.btn_people, "jobs": self.btn_jobs,
+            "config": self.btn_config}
 
         for key, boton in botones.items():
             if key == name:
@@ -167,10 +166,7 @@ class LinkedInBotApp(ctk.CTk):
         password = self.entry_pass.get()
 
         # 1. Guardar Email y Ruta en JSON (Datos no sensibles)
-        datos = {
-            "email": email,
-            "ruta_guardado": ruta
-        }
+        datos = {"email": email, "ruta_guardado": ruta}
         with open(self.config_file, "w") as f:
             json.dump(datos, f)
 
@@ -195,18 +191,34 @@ class LinkedInBotApp(ctk.CTk):
     # ==============================================================================
     def setup_connect_ui(self):
         self.conn_label = ctk.CTkLabel(self.connect_frame, text="Procesar Lista de Contactos (CSV)",
-                                       font=ctk.CTkFont(size=18))
-        self.conn_label.pack(pady=20)
-        self.btn_browse = ctk.CTkButton(self.connect_frame, text="Seleccionar CSV", height=40, command=self.load_csv)
-        self.btn_browse.pack(pady=10)
+                                       font=ctk.CTkFont(size=22, weight="bold"))
+        self.conn_label.pack(pady=(20, 10))
+
+        # --- NUEVO: Campo para mostrar la ruta del archivo ---
+        # Creamos un contenedor para que el Entry y el botón de buscar estén en la misma línea
+        path_frame = ctk.CTkFrame(self.connect_frame, fg_color="transparent")
+        path_frame.pack(pady=10, padx=20, fill="x")
+
+        # DEFINICIÓN IMPORTANTE: self.entry_csv_path
+        self.entry_csv_path = ctk.CTkEntry(path_frame, placeholder_text="No file selected", height=40)
+        self.entry_csv_path.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.btn_browse = ctk.CTkButton(path_frame, text="Examine...", height=40, width=100, command=self.load_csv)
+        self.btn_browse.pack(side="right")
+
+        # Inicializamos la variable que usabas antes por si acaso
         self.csv_path = None
-        self.btn_run_csv = ctk.CTkButton(self.connect_frame, text="Iniciar Procesamiento", fg_color="green", height=40,
+
+        # Botón de ejecución
+        self.btn_run_csv = ctk.CTkButton(self.connect_frame, text="🚀 Start Processing", fg_color="#28a745",
+                                         hover_color="#218838", height=50, font=ctk.CTkFont(weight="bold"),
                                          command=lambda: threading.Thread(target=self.run_csv_process).start())
-        self.btn_run_csv.pack(pady=20)
+        self.btn_run_csv.pack(pady=30)
 
     def setup_people_ui(self):
         ctk.CTkLabel(self.people_frame, text="Buscador de Personas", font=ctk.CTkFont(size=18)).pack(pady=10)
-        self.entry_p_search = ctk.CTkEntry(self.people_frame, placeholder_text="Puesto (ej: CTO Malta)", width=300, height=40)
+        self.entry_p_search = ctk.CTkEntry(self.people_frame, placeholder_text="Puesto (ej: CTO Malta)", width=300,
+                                           height=40)
         self.entry_p_search.pack(pady=5)
         self.slider_pages = ctk.CTkSlider(self.people_frame, from_=1, to=10, number_of_steps=9)
         self.slider_pages.pack(pady=10)
@@ -228,8 +240,8 @@ class LinkedInBotApp(ctk.CTk):
 
     def setup_config_ui(self):
         # --- TÍTULO PRINCIPAL ---
-        ctk.CTkLabel(self.config_frame, text="LinkedIn Account",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(fill="x", pady=(20, 10))
+        ctk.CTkLabel(self.config_frame, text="LinkedIn Account", font=ctk.CTkFont(size=18, weight="bold")).pack(
+            fill="x", pady=(20, 10))
 
         # --- CONTENEDOR PARA CREDENCIALES ---
         form_inner = ctk.CTkFrame(self.config_frame, fg_color="transparent")
@@ -246,8 +258,8 @@ class LinkedInBotApp(ctk.CTk):
         self.entry_pass.pack(pady=(5, 15))
 
         # --- TÍTULO SECCIÓN DIRECTORIO ---
-        ctk.CTkLabel(form_inner, text="Saves Directory Location",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10), fill="x")
+        ctk.CTkLabel(form_inner, text="Saves Directory Location", font=ctk.CTkFont(size=18, weight="bold")).pack(
+            pady=(20, 10), fill="x")
 
         ctk.CTkLabel(form_inner, text="Save file on:", anchor="w").pack(fill="x", padx=5)
 
@@ -258,19 +270,13 @@ class LinkedInBotApp(ctk.CTk):
         self.entry_folder = ctk.CTkEntry(folder_frame, placeholder_text="Selecciona carpeta...", width=260, height=40)
         self.entry_folder.pack(side="left", padx=(0, 5))
 
-        self.btn_browse_folder = ctk.CTkButton(
-            folder_frame,
-            text="Examine...",
-            width=80,
-            height=40,
-            cursor="hand2",
-            command=self.seleccionar_carpeta
-        )
+        self.btn_browse_folder = ctk.CTkButton(folder_frame, text="Examine...", width=80, height=40, cursor="hand2",
+            command=self.seleccionar_carpeta)
         self.btn_browse_folder.pack(side="left")
 
         # --- BOTÓN GUARDAR ---
-        self.btn_save = ctk.CTkButton(form_inner, text="Save Settings", height=45,
-                                      fg_color="#0077B5", command=self.guardar_configuracion)
+        self.btn_save = ctk.CTkButton(form_inner, text="Save Settings", height=45, fg_color="#0077B5",
+                                      command=self.guardar_configuracion)
         self.btn_save.pack(pady=30)
 
     # ==============================================================================
@@ -333,58 +339,156 @@ class LinkedInBotApp(ctk.CTk):
 
     @staticmethod
     def buscar_y_clicar_js(driver, palabras_clave, intentar_clic=True):
+        """
+        Escanea el DOM buscando botones o elementos que coincidan con las palabras clave.
+        Usa una lógica robusta para encontrar spans dentro de botones.
+        """
         script = """
-        var keywords = arguments[0];
-        var click    = arguments[1];
-        var selectores = "button, a, [role='button'], [role='menuitem'], [role='option']";
-        var elementos  = document.querySelectorAll(selectores);
-        for (var i = 0; i < elementos.length; i++) {
-            var el  = elementos[i];
-            if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
-            var txt  = (el.innerText  || "").toLowerCase().trim();
-            var aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
-            for (var j = 0; j < keywords.length; j++) {
-                var kw = keywords[j].toLowerCase().trim();
-                if (txt === kw || aria.includes(kw) || txt.includes(kw)) {
-                    if (click) {
-                        el.scrollIntoView({behavior: "smooth", block: "center"});
-                        el.click();
+            var keywords = arguments[0];
+            var click = arguments[1];
+            var selectores = "button, span, a, [role='button']";
+            var elementos = document.querySelectorAll(selectores);
+
+            for (var i = 0; i < elementos.length; i++) {
+                var el = elementos[i];
+
+                // Ignorar elementos no visibles
+                if (!(el.offsetWidth > 0 && el.offsetHeight > 0)) continue;
+
+                var txt = (el.innerText || "").toLowerCase().trim();
+                var aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
+                var title = (el.getAttribute("title") || "").toLowerCase().trim();
+
+                for (var j = 0; j < keywords.length; j++) {
+                    var kw = keywords[j].toLowerCase().trim();
+
+                    // Verificamos coincidencia parcial o exacta
+                    if (txt.includes(kw) || aria.includes(kw) || title.includes(kw)) {
+                        if (click) {
+                            // Si el elemento es un span, intentamos clicar al botón padre
+                            var target = (el.tagName.toLowerCase() === 'span' && el.parentElement) ? el.parentElement : el;
+                            target.scrollIntoView({behavior: "auto", block: "center"});
+                            target.click();
+                        }
+                        return true;
                     }
-                    return true;
                 }
             }
-        }
-        return false;
-        """
-        return driver.execute_script(script, palabras_clave, intentar_clic)
+            return false;
+            """
+        try:
+            return driver.execute_script(script, palabras_clave, intentar_clic)
+        except Exception as e:
+            print(f"Error en JS: {e}")
+            return False
 
     def load_csv(self):
-        self.csv_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
-        if self.csv_path:
-            self.escribir_log(f"Cargado: {os.path.basename(self.csv_path)}")
+        """Abre el explorador de archivos y carga la ruta en la interfaz."""
+        path = filedialog.askopenfilename(initialdir=self.ruta_guardado, title="Seleccionar CSV de contactos",
+            filetypes=[("Archivos CSV", "*.csv")])
+        if path:
+            self.csv_path = path
+            self.entry_csv_path.delete(0, "end")
+            self.entry_csv_path.insert(0, path)
+            self.escribir_log(f"📂 Archivo cargado: {os.path.basename(path)}")
 
     def run_csv_process(self):
-        if not self.csv_path:
-            messagebox.showerror("Error", "Selecciona un archivo CSV primero")
+        """Proceso principal de conexión masiva desde CSV."""
+        ruta = self.entry_csv_path.get()
+        if not ruta or not os.path.exists(ruta):
+            self.escribir_log("❌ Error: Selecciona un archivo CSV válido.")
             return
 
-        self.escribir_log("Iniciando Driver...")
+        self.escribir_log("🚀 Iniciando navegador para conectar...")
         driver = self.iniciar_driver()
-        if self.login_proceso(driver):
-            with open(self.csv_path, mode='r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for fila in reader:
-                    url = fila.get('url', '')
-                    self.escribir_log(f"Visitando: {url}")
-                    driver.get(url)
-                    time.sleep(random.uniform(5, 8))
-                    if self.buscar_y_clicar_js(driver, ["conectar", "connect"]):
-                        time.sleep(2)
-                        self.buscar_y_clicar_js(driver, ["enviar ahora", "send now", "sin nota"])
-                        self.escribir_log("Invitación enviada")
-                    time.sleep(random.uniform(5, 10))
-        driver.quit()
-        self.escribir_log("Proceso Finalizado")
+        if not driver: return
+
+        try:
+            if self.login_proceso(driver):
+                self.escribir_log("✅ Login exitoso. Procesando lista...")
+
+                with open(ruta, mode='r', encoding='utf-8-sig') as f:
+                    reader = csv.DictReader(f)
+
+                    for fila in reader:
+                        # Saltar filas vacías
+                        if not any(fila.values()): continue
+
+                        # 1. Extracción flexible de datos
+                        url = fila.get('url') or fila.get('Link') or fila.get('URL') or fila.get('Perfil LinkedIn')
+                        nombre = fila.get('full_name') or fila.get('Nombre') or fila.get(
+                            'Nombre Completo') or "Contacto"
+
+                        if not url or "http" not in str(url):
+                            self.escribir_log(f"⚠️ Saltando fila: URL no válida.")
+                            continue
+
+                        self.escribir_log(f"👤 Visitando a: {nombre}")
+                        driver.get(url)
+                        time.sleep(random.uniform(5, 7))
+
+                        # 2. Paso 1: Clic en 'Conectar' (Directo o Menú Más)
+                        conectado = self.buscar_y_clicar_js(driver, ["conectar", "connect"])
+
+                        if not conectado:
+                            self.escribir_log("   🔍 Buscando en menú 'Más'...")
+                            if self.buscar_y_clicar_js(driver, ["más...", "more...", "más"]):
+                                time.sleep(1.5)
+                                conectado = self.buscar_y_clicar_js(driver, ["conectar", "connect"])
+
+                        # 2. PASO: CONFIRMACIÓN FINAL (NAVEGACIÓN POR TABS)
+                        if conectado:
+                            self.escribir_log("   ↳ Modal detectada. Navegando con TAB al botón...")
+                            time.sleep(3.5)
+
+                            try:
+                                from selenium.webdriver.common.action_chains import ActionChains
+                                actions = ActionChains(driver)
+
+                                # 1. Pulsamos TAB dos veces para saltar de la Modal/Nota al botón 'Enviar sin nota'
+                                # (Normalmente es 1 o 2 veces dependiendo de dónde empiece el foco)
+                                actions.send_keys(Keys.TAB)
+                                time.sleep(0.5)
+                                actions.send_keys(Keys.TAB)
+                                time.sleep(0.5)
+                                actions.send_keys(Keys.TAB)
+                                time.sleep(0.5)
+
+                                # 2. Ahora que el foco debería estar en el botón azul, pulsamos ENTER
+                                actions.send_keys(Keys.ENTER)
+                                actions.perform()
+
+                                # 3. Intento extra con ESPACIO (a veces el ENTER no dispara botones en JS)
+                                time.sleep(0.5)
+                                actions.send_keys(Keys.SPACE)
+                                actions.perform()
+
+                                self.escribir_log(f"   ✅ Comandos de Tabulación + Enter enviados.")
+
+                            except Exception as e:
+                                self.escribir_log(f"   ❌ Fallo en navegación TAB: {str(e)}")
+                                # Limpieza por si acaso
+                                try:
+                                    ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                                except:
+                                    pass
+
+                            time.sleep(4)
+
+                        # Pausa de seguridad entre contactos
+                        espera = random.uniform(10, 18)
+                        self.escribir_log(f"⏳ Esperando {int(espera)}s para el siguiente...")
+                        time.sleep(espera)
+
+                self.escribir_log("🏁 Proceso de CSV finalizado.")
+                if hasattr(self, 'mostrar_notificacion_temporal'):
+                    self.mostrar_notificacion_temporal("Éxito", "Lista procesada correctamente.")
+
+        except Exception as e:
+            self.escribir_log(f"❌ Error crítico: {str(e)}")
+        finally:
+            driver.quit()
+            self.escribir_log("🔒 Sesión cerrada.")
 
     def run_people_search(self):
         # 1. Obtener datos de la interfaz
@@ -459,13 +563,9 @@ class LinkedInBotApp(ctk.CTk):
                                 ubicacion = textos_secundarios[2]
 
                             if len(nombre) > 2:
-                                leads_finales.append({
-                                    "Nombre Completo": nombre,
-                                    "Cargo": cargo,
-                                    "Empresa": empresa_solo,
-                                    "Ubicación": ubicacion,
-                                    "Perfil LinkedIn": link
-                                })
+                                leads_finales.append(
+                                    {"Nombre Completo": nombre, "Cargo": cargo, "Empresa": empresa_solo,
+                                        "Ubicación": ubicacion, "Perfil LinkedIn": link})
                                 enlaces_vistos.add(link)
                         except:
                             continue
@@ -509,14 +609,12 @@ class LinkedInBotApp(ctk.CTk):
                 nombre_pais_en = datos_pais[0]
                 geo_id = datos_pais[1]
 
-                url_busqueda = (
-                    f"https://www.linkedin.com/jobs/search/?"
-                    f"keywords={urllib.parse.quote(job_key)}"
-                    f"&geoId={geo_id}"
-                    f"&location={urllib.parse.quote(nombre_pais_en)}"
-                    f"&f_WT=1%2C3"
-                    f"&sortBy=DD"
-                )
+                url_busqueda = (f"https://www.linkedin.com/jobs/search/?"
+                                f"keywords={urllib.parse.quote(job_key)}"
+                                f"&geoId={geo_id}"
+                                f"&location={urllib.parse.quote(nombre_pais_en)}"
+                                f"&f_WT=1%2C3"
+                                f"&sortBy=DD")
 
                 self.escribir_log(f"🌍 Buscando '{job_key}' en {pais_seleccionado}...")
                 driver.get(url_busqueda)
@@ -591,11 +689,9 @@ class LinkedInBotApp(ctk.CTk):
 
                         palabras_basura = ["Inicio", "Notificaciones", "Mensajes", "Mi red", "Empleos", "Premium"]
                         if not any(pb in titulo for pb in palabras_basura):
-                            resultados.append({
-                                "Puesto": titulo, "Empresa": empresa, "Ubicación": ubicacion_texto,
-                                "Modalidad": modalidad, "Reclutador": reclutador,
-                                "Email": email_detectado, "Link": url_job
-                            })
+                            resultados.append({"Puesto": titulo, "Empresa": empresa, "Ubicación": ubicacion_texto,
+                                "Modalidad": modalidad, "Reclutador": reclutador, "Email": email_detectado,
+                                "Link": url_job})
                             self.escribir_log(f"✅ Extraído: {titulo} en {empresa}")
 
                     except:
@@ -613,12 +709,8 @@ class LinkedInBotApp(ctk.CTk):
                         nombre_sugerido = f"Vacantes_{pais_seleccionado}_{int(time.time())}.csv"
 
                         # Abrir el "Guardar como..." nativo del sistema
-                        archivo_path = filedialog.asksaveasfilename(
-                            initialdir=self.ruta_guardado,
-                            initialfile=nombre_sugerido,
-                            defaultextension=".csv",
-                            filetypes=[("CSV files", "*.csv")]
-                        )
+                        archivo_path = filedialog.asksaveasfilename(initialdir=self.ruta_guardado,
+                            initialfile=nombre_sugerido, defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
 
                         if archivo_path:
                             df.to_csv(archivo_path, index=False, encoding='utf-8-sig')
