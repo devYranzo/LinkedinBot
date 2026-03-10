@@ -1,0 +1,547 @@
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
+import threading
+import undetected_chromedriver as uc
+import pandas as pd
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.common.by import By
+from PIL import Image
+import time
+import random
+import csv
+import urllib.parse
+import re
+import os
+import json
+import keyring
+
+# --- Configuration ---
+ctk.set_appearance_mode("System")
+ctk.set_default_color_theme("blue")
+
+GEOIDS = {"Malta": ("Malta", "102126540"), "España": ("Spain", "105646813"), }
+
+
+class LinkedInBotApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("LinkedIn Bot")
+        self.geometry("1100x750")
+
+        # 1. Definir variables de estado
+        self.config_file = "config.json"
+        self.ruta_guardado = os.getcwd()
+        self.email_guardado = ""
+
+        # 2. Cargar datos del archivo (Solo carga las variables, no toca la UI)
+        self.cargar_configuracion()
+
+        # 3. Configuración del Grid Principal
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # --- SIDEBAR (Columna 0) ---
+        self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
+        self.grid_columnconfigure(0, minsize=250)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="LinkedIn Bot",
+                                       font=ctk.CTkFont(size=34, weight="bold"))
+        self.logo_label.grid(row=0, column=0, padx=20, pady=20)
+
+        # Botones de navegación (con sus iconos)
+        self.connectIcon = self.cargar_icono("customer-insight")
+        self.btn_connect = ctk.CTkButton(self.sidebar_frame, text="Connect (CSV)", text_color=("black", "white"),
+                                         anchor="w", fg_color="transparent", hover_color="#333333", height=40,
+                                         cursor="hand2", image=self.connectIcon,
+                                         command=lambda: self.select_frame("connect"))
+        self.btn_connect.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
+
+        self.searchIcon = self.cargar_icono("search")
+        self.btn_people = ctk.CTkButton(self.sidebar_frame, text="Search People", text_color=("black", "white"),
+                                        anchor="w", fg_color="transparent", hover_color="#333333", height=40,
+                                        cursor="hand2", image=self.searchIcon,
+                                        command=lambda: self.select_frame("people"))
+        self.btn_people.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
+
+        self.briefcaseIcon = self.cargar_icono("briefcase")
+        self.btn_jobs = ctk.CTkButton(self.sidebar_frame, text="Vacancies", text_color=("black", "white"), anchor="w",
+                                      fg_color="transparent", hover_color="#333333", height=40, cursor="hand2",
+                                      image=self.briefcaseIcon, command=lambda: self.select_frame("jobs"))
+        self.btn_jobs.grid(row=3, column=0, padx=10, pady=5, sticky="ew")
+
+        self.configIcon = self.cargar_icono("configuration")
+        self.btn_config = ctk.CTkButton(self.sidebar_frame, text="Configuration", text_color=("black", "white"),
+                                        anchor="w", fg_color="transparent", hover_color="#333333", height=40,
+                                        cursor="hand2", image=self.configIcon,
+                                        command=lambda: self.select_frame("config"))
+        self.btn_config.grid(row=5, column=0, padx=10, pady=5, sticky="ew")
+
+        # --- CONTENEDOR DERECHO ---
+        self.right_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.right_container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.right_container.grid_rowconfigure(0, weight=1)
+        self.right_container.grid_columnconfigure(0, weight=1)
+
+        # Inicializar Frames
+        self.connect_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
+        self.people_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
+        self.jobs_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
+        self.config_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
+
+        # CREAR LA UI (Esto define self.entry_email, etc.)
+        self.setup_connect_ui()
+        self.setup_people_ui()
+        self.setup_jobs_ui()
+        self.setup_config_ui()
+
+        # TERMINAL
+        self.terminal = ctk.CTkTextbox(self.right_container, height=200, border_width=1)
+        self.terminal.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+
+        # 4. AHORA SÍ: RELLENAR LOS CAMPOS (Porque ya existen)
+        if self.email_guardado:
+            self.entry_email.insert(0, self.email_guardado)
+
+        if self.ruta_guardado:
+            self.entry_folder.insert(0, self.ruta_guardado)
+
+        password = keyring.get_password("LinkedInBot_AIntelligence", self.email_guardado)
+        if password:
+            self.entry_pass.insert(0, password)
+
+        self.select_frame("connect")
+
+    def select_frame(self, name):
+        botones = {
+            "connect": self.btn_connect,
+            "people": self.btn_people,
+            "jobs": self.btn_jobs,
+            "config": self.btn_config
+        }
+
+        for key, boton in botones.items():
+            if key == name:
+                boton.configure(fg_color="#333333")  # Botón activo
+            else:
+                boton.configure(fg_color="transparent")  # Botones inactivos
+
+        # Lógica de visualización
+        self.connect_frame.grid_forget()
+        self.people_frame.grid_forget()
+        self.jobs_frame.grid_forget()
+        self.config_frame.grid_forget()
+
+        if name == "connect":
+            self.connect_frame.grid(row=0, column=0, sticky="nsew")
+        elif name == "people":
+            self.people_frame.grid(row=0, column=0, sticky="nsew")
+        elif name == "jobs":
+            self.jobs_frame.grid(row=0, column=0, sticky="nsew")
+        elif name == "config":
+            self.config_frame.grid(row=0, column=0, sticky="nsew")
+
+    def cargar_icono(self, nombre_base, size=(20, 20)):
+        """
+        Carga automáticamente versiones light y dark.
+        Ejemplo: nombre_base="search" -> busca "search-light.png" y "search-dark.png"
+        """
+        ruta_base = "Icons"  # Tu carpeta de iconos
+
+        path_light = os.path.join(ruta_base, f"{nombre_base}-light.png")
+        path_dark = os.path.join(ruta_base, f"{nombre_base}-dark.png")
+
+        # Abrimos las imágenes con PIL
+        img_light = Image.open(path_light)
+        img_dark = Image.open(path_dark)
+
+        return ctk.CTkImage(light_image=img_light, dark_image=img_dark, size=size)
+
+    def guardar_configuracion(self):
+        email = self.entry_email.get()
+        ruta = self.entry_folder.get()
+        password = self.entry_pass.get()
+
+        # 1. Guardar Email y Ruta en JSON (Datos no sensibles)
+        datos = {
+            "email": email,
+            "ruta_guardado": ruta
+        }
+        with open(self.config_file, "w") as f:
+            json.dump(datos, f)
+
+        # 2. Guardar Contraseña en el LLAVERO DEL SISTEMA (Seguro)
+        if email and password:
+            try:
+                keyring.set_password("LinkedInBot_AIntelligence", email, password)
+                self.escribir_log("Configuración y contraseña guardadas de forma segura.")
+                self.escribir_log("Configuración guardada.")
+            except Exception as e:
+                self.escribir_log(f"Error al acceder al llavero: {e}")
+
+    def cargar_configuracion(self):
+        if os.path.exists(self.config_file):
+            with open(self.config_file, "r") as f:
+                datos = json.load(f)
+                self.email_guardado = datos.get("email", "")
+                self.ruta_guardado = datos.get("ruta_guardado", os.getcwd())
+
+    # ==============================================================================
+    # UI SETUP
+    # ==============================================================================
+    def setup_connect_ui(self):
+        self.conn_label = ctk.CTkLabel(self.connect_frame, text="Procesar Lista de Contactos (CSV)",
+                                       font=ctk.CTkFont(size=18))
+        self.conn_label.pack(pady=20)
+        self.btn_browse = ctk.CTkButton(self.connect_frame, text="Seleccionar CSV", height=40, command=self.load_csv)
+        self.btn_browse.pack(pady=10)
+        self.csv_path = None
+        self.btn_run_csv = ctk.CTkButton(self.connect_frame, text="Iniciar Procesamiento", fg_color="green", height=40,
+                                         command=lambda: threading.Thread(target=self.run_csv_process).start())
+        self.btn_run_csv.pack(pady=20)
+
+    def setup_people_ui(self):
+        ctk.CTkLabel(self.people_frame, text="Buscador de Personas", font=ctk.CTkFont(size=18)).pack(pady=10)
+        self.entry_p_search = ctk.CTkEntry(self.people_frame, placeholder_text="Puesto (ej: CTO Malta)", width=300, height=40)
+        self.entry_p_search.pack(pady=5)
+        self.slider_pages = ctk.CTkSlider(self.people_frame, from_=1, to=10, number_of_steps=9)
+        self.slider_pages.pack(pady=10)
+        self.btn_run_people = ctk.CTkButton(self.people_frame, text="Extraer Perfiles", height=40,
+                                            command=lambda: threading.Thread(target=self.run_people_search).start())
+        self.btn_run_people.pack(pady=10)
+
+    def setup_jobs_ui(self):
+        ctk.CTkLabel(self.jobs_frame, text="Buscador de Vacantes", font=ctk.CTkFont(size=18)).pack(pady=10)
+        self.entry_j_search = ctk.CTkEntry(self.jobs_frame, placeholder_text="Software Engineer", width=300, height=40)
+        self.entry_j_search.pack(pady=5)
+        self.combo_pais = ctk.CTkComboBox(self.jobs_frame, values=list(GEOIDS.keys()), height=40)
+        self.combo_pais.pack(pady=10)
+        self.btn_run_jobs = ctk.CTkButton(self.jobs_frame, text="Buscar Empleos", height=40,
+                                          command=lambda: threading.Thread(target=self.run_job_search).start())
+        self.btn_run_jobs.pack(pady=10)
+        self.job_status_label = ctk.CTkLabel(self.jobs_frame, text="", font=ctk.CTkFont(weight="bold"))
+        self.job_status_label.pack(pady=5)
+
+    def setup_config_ui(self):
+        # --- Configuración de cuenta ---
+
+        # Título principal
+        ctk.CTkLabel(self.config_frame, text="Account Configuration", font=ctk.CTkFont(size=22, weight="bold")).pack(
+            pady=(20, 10))
+
+        ctk.CTkLabel(self.config_frame, text="Introduce LinkedIn account credentials to use",
+            text_color="gray").pack(pady=(0, 30))
+
+        # Contenedor central para el formulario
+        form_inner = ctk.CTkFrame(self.config_frame, fg_color="transparent")
+        form_inner.pack(pady=10)
+
+        # Email
+        ctk.CTkLabel(form_inner, text="Email:", anchor="w").pack(fill="x", padx=5)
+        self.entry_email = ctk.CTkEntry(form_inner, placeholder_text="account@email.com", width=350, height=40)
+        self.entry_email.pack(pady=(5, 15))
+
+        # Password
+        ctk.CTkLabel(form_inner, text="Password:", anchor="w").pack(fill="x", padx=5)
+        self.entry_pass = ctk.CTkEntry(form_inner, placeholder_text="••••••••", show="*", width=350, height=40)
+        self.entry_pass.pack(pady=(5, 15))
+
+        # Botón de Guardar
+        self.btn_save = ctk.CTkButton(form_inner, text="Save", height=40, fg_color="#0077B5", command=self.guardar_configuracion)
+        self.btn_save.pack(pady=20)
+
+        # --- Configuracion de ubicacion de guardar ---
+        ctk.CTkLabel(form_inner, text="Save file on:", anchor="w").pack(fill="x", padx=5, pady=(15, 0))
+
+        # Frame para agrupar la entrada y el botón de búsqueda
+        folder_frame = ctk.CTkFrame(form_inner, fg_color="transparent")
+        folder_frame.pack(fill="x", pady=5)
+
+        self.entry_folder = ctk.CTkEntry(folder_frame, placeholder_text="Selecciona carpeta...", width=270)
+        self.entry_folder.insert(0, self.ruta_guardado)
+        self.entry_folder.pack(side="left", padx=(0, 5))
+
+        self.btn_browse_folder = ctk.CTkButton(
+            folder_frame,
+            text="Examine...",
+            width=40,
+            cursor="hand2",
+            command=self.seleccionar_carpeta
+        )
+        self.btn_browse_folder.pack(side="left")
+
+    # ==============================================================================
+    # CORE LOGIC (PORTED FROM YOUR SCRIPT)
+    # ==============================================================================
+    def iniciar_driver(self):
+        options = uc.ChromeOptions()
+        # (Same options as your original script)
+        options.add_argument("--window-size=1280,900")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--start-maximized")
+        options.add_argument("--disable-notifications")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--disable-extensions")
+        try:
+            return uc.Chrome(options=options)
+        except:
+            options = uc.ChromeOptions()
+            options.add_argument("--window-size=1280,900")
+            driver = uc.Chrome(options=options, version_main=145)  # Usa la version más nueva a día 05/03/2026
+            return driver
+
+    def escribir_log(self, mensaje):
+        try:
+            self.terminal.insert("end", f"[{time.strftime('%H:%M:%S')}] {mensaje}\n")
+            self.terminal.see("end")
+        except Exception as e:
+            print(f"Error escribiendo en terminal: {e}")
+
+    def seleccionar_carpeta(self):
+        carpeta = filedialog.askdirectory(initialdir=self.ruta_guardado, title="Select where you want to save the CSV")
+        if carpeta:
+            self.ruta_guardado = carpeta
+            self.entry_folder.delete(0, "end")
+            self.entry_folder.insert(0, carpeta)
+            self.escribir_log(f"Save directory set to: {carpeta}")
+
+    def login_proceso(self, driver):
+        email = self.entry_email.get()
+        password = self.entry_pass.get()
+        if not email or not password:
+            self.escribir_log(f"Error: Falta Email o Password")
+            return False
+
+        driver.get("https://www.linkedin.com/login")
+        time.sleep(2)
+        try:
+            driver.find_element(By.ID, "username").send_keys(email)
+            driver.find_element(By.ID, "password").send_keys(password)
+            driver.find_element(By.XPATH, "//button[@type='submit']").click()
+            time.sleep(5)
+            if "checkpoint" in driver.current_url:
+                self.escribir_log(f"Resuelve el CAPTCHA en el navegador...")
+                WebDriverWait(driver, 60).until(ec.url_contains("feed"))
+            return True
+        except Exception as e:
+            self.escribir_log(f"Error Login: {e}")
+            return False
+
+    def buscar_y_clicar_js(self, driver, palabras_clave, intentar_clic=True):
+        script = """
+        var keywords = arguments[0];
+        var click    = arguments[1];
+        var selectores = "button, a, [role='button'], [role='menuitem'], [role='option']";
+        var elementos  = document.querySelectorAll(selectores);
+        for (var i = 0; i < elementos.length; i++) {
+            var el  = elementos[i];
+            if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
+            var txt  = (el.innerText  || "").toLowerCase().trim();
+            var aria = (el.getAttribute("aria-label") || "").toLowerCase().trim();
+            for (var j = 0; j < keywords.length; j++) {
+                var kw = keywords[j].toLowerCase().trim();
+                if (txt === kw || aria.includes(kw) || txt.includes(kw)) {
+                    if (click) {
+                        el.scrollIntoView({behavior: "smooth", block: "center"});
+                        el.click();
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+        """
+        return driver.execute_script(script, palabras_clave, intentar_clic)
+
+    def load_csv(self):
+        self.csv_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if self.csv_path:
+            self.escribir_log(f"Cargado: {os.path.basename(self.csv_path)}")
+
+    def run_csv_process(self):
+        if not self.csv_path:
+            messagebox.showerror("Error", "Selecciona un archivo CSV primero")
+            return
+
+        self.escribir_log("Iniciando Driver...")
+        driver = self.iniciar_driver()
+        if self.login_proceso(driver):
+            with open(self.csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for fila in reader:
+                    url = fila.get('url', '')
+                    self.escribir_log(f"Visitando: {url}")
+                    driver.get(url)
+                    time.sleep(random.uniform(5, 8))
+                    if self.buscar_y_clicar_js(driver, ["conectar", "connect"]):
+                        time.sleep(2)
+                        self.buscar_y_clicar_js(driver, ["enviar ahora", "send now", "sin nota"])
+                        self.escribir_log("Invitación enviada")
+                    time.sleep(random.uniform(5, 10))
+        driver.quit()
+        self.escribir_log("Proceso Finalizado")
+
+    def run_people_search(self):
+        keyword = self.entry_p_search.get()
+        paginas = int(self.slider_pages.get())
+        self.escribir_log(f"Buscando {keyword}...")
+        driver = self.iniciar_driver()
+        if self.login_proceso(driver):
+            self.escribir_log("Funcionalidad de extracción en proceso...")
+        driver.quit()
+
+    def run_job_search(self):
+        # 1. Obtener datos de la UI
+        job_key = self.entry_j_search.get()
+        pais_seleccionado = self.combo_pais.get()
+        user_email = self.entry_email.get()
+        user_pass = self.entry_pass.get()
+
+        if not user_email or not user_pass:
+            self.escribir_log("❌ Error: Introduce tus credenciales en Configuración.")
+            return
+
+        # 2. Iniciar Navegador
+        driver = self.iniciar_driver()
+        if not driver: return
+
+        try:
+            if self.login_proceso(driver):
+                # --- DESEMPAQUETADO ---
+                datos_pais = GEOIDS[pais_seleccionado]
+                nombre_pais_en = datos_pais[0]
+                geo_id = datos_pais[1]
+
+                url_busqueda = (
+                    f"https://www.linkedin.com/jobs/search/?"
+                    f"keywords={urllib.parse.quote(job_key)}"
+                    f"&geoId={geo_id}"
+                    f"&location={urllib.parse.quote(nombre_pais_en)}"
+                    f"&f_WT=1%2C3"
+                    f"&sortBy=DD"
+                )
+
+                self.escribir_log(f"🌍 Buscando '{job_key}' en {pais_seleccionado}...")
+                driver.get(url_busqueda)
+                time.sleep(5)
+
+                # --- SCROLL DINÁMICO ---
+                try:
+                    panel = None
+                    for selector in [".jobs-search-results-list", ".scaffold-layout__list-container", "main"]:
+                        try:
+                            panel = driver.find_element(By.CSS_SELECTOR, selector)
+                            if panel.is_displayed(): break
+                        except:
+                            continue
+
+                    if panel:
+                        for i in range(5):
+                            self.escribir_log(f"Scroll en panel de resultados ({i + 1}/5)...")
+                            driver.execute_script("arguments[0].scrollTop += 1000;", panel)
+                            time.sleep(1.5)
+                except:
+                    pass
+
+                # --- EXTRACCIÓN ---
+                cards = driver.find_elements(By.XPATH, "//div[contains(@class, 'job-card-container')]")
+                self.escribir_log(f"Analizando {len(cards)} tarjetas encontradas...")
+                resultados = []
+
+                for card in cards:
+                    try:
+                        driver.execute_script("arguments[0].scrollIntoView();", card)
+                        card.click()
+                        time.sleep(2)
+
+                        link_el = card.find_element(By.XPATH, ".//a[contains(@href, '/jobs/view/')]")
+                        url_job = link_el.get_attribute("href").split("?")[0]
+                        lineas = card.text.split('\n')
+                        titulo = lineas[0].strip()
+                        empresa = lineas[2] if len(lineas) > 2 else "N/A"
+                        ubicacion_texto = lineas[3] if len(lineas) > 3 else "N/A"
+
+                        # Reclutador
+                        reclutador = "Anónimo"
+                        try:
+                            reclutador_el = driver.find_element(By.CSS_SELECTOR,
+                                                                ".jobs-poster__name, .app-aware-link.jobs-poster__name")
+                            reclutador = reclutador_el.text.strip()
+                        except:
+                            pass
+
+                        # Email en descripción
+                        email_detectado = "No encontrado"
+                        try:
+                            descripcion = driver.find_element(By.ID, "job-details").text
+                            emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', descripcion)
+                            if emails: email_detectado = ", ".join(list(set(emails)))
+                        except:
+                            pass
+
+                        # Modalidad
+                        modalidad = "No especificada"
+                        try:
+                            info_empleo = driver.find_element(By.CLASS_NAME, "jobs-unified-top-card__job-insight").text
+                            if any(x in info_empleo for x in ["Híbrido", "Hybrid"]):
+                                modalidad = "Híbrido"
+                            elif any(x in info_empleo for x in ["Presencial", "On-site"]):
+                                modalidad = "Presencial"
+                            elif any(x in info_empleo for x in ["Remoto", "Remote"]):
+                                modalidad = "Remoto"
+                        except:
+                            pass
+
+                        palabras_basura = ["Inicio", "Notificaciones", "Mensajes", "Mi red", "Empleos", "Premium"]
+                        if not any(pb in titulo for pb in palabras_basura):
+                            resultados.append({
+                                "Puesto": titulo, "Empresa": empresa, "Ubicación": ubicacion_texto,
+                                "Modalidad": modalidad, "Reclutador": reclutador,
+                                "Email": email_detectado, "Link": url_job
+                            })
+                            self.escribir_log(f"✅ Extraído: {titulo} en {empresa}")
+
+                    except:
+                        continue
+
+                # --- PROCESAMIENTO FINAL ---
+                if resultados:
+                    df = pd.DataFrame(resultados).drop_duplicates(subset=['Link'])
+                    if pais_seleccionado != "Reino Unido":
+                        df = df[
+                            ~df['Ubicación'].str.contains('United Kingdom|Reino Unido|London', case=False, na=False)]
+
+                    if not df.empty:
+                        # Generamos un nombre sugerido
+                        nombre_sugerido = f"Vacantes_{pais_seleccionado}_{int(time.time())}.csv"
+
+                        # Abrir el "Guardar como..." nativo del sistema
+                        archivo_path = filedialog.asksaveasfilename(
+                            initialdir=self.ruta_guardado,
+                            initialfile=nombre_sugerido,
+                            defaultextension=".csv",
+                            filetypes=[("CSV files", "*.csv")]
+                        )
+
+                        if archivo_path:
+                            df.to_csv(archivo_path, index=False, encoding='utf-8-sig')
+                            self.escribir_log(f"Guardado en:\n{os.path.basename(archivo_path)}")
+                            self.escribir_log(f"Archivo guardado en: {archivo_path}")
+                        else:
+                            self.escribir_log("Guardado cancelado por el usuario.")
+                    else:
+                        self.escribir_log("No quedaron resultados tras filtrar por ubicación.")
+                else:
+                    self.escribir_log("No se detectaron vacantes válidas.")
+
+        finally:
+            driver.quit()
+            self.escribir_log("Navegador cerrado.")
+
+
+if __name__ == "__main__":
+    app = LinkedInBotApp()
+    app.mainloop()

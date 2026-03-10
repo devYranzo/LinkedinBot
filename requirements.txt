@@ -1,0 +1,6 @@
+customtkinter
+undetected-chromedriver
+pandas
+selenium
+pillow
+keyring
