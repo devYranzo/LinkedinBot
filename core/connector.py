@@ -5,7 +5,7 @@ import random
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
-from core.browser import iniciar_driver, login_proceso, buscar_y_clicar_js
+from core.browser import iniciar_driver, login_proceso, buscar_y_clicar_js, debe_saltar_perfil
 
 
 def run_csv_process(email, password, ruta_csv, log_fn=None):
@@ -49,15 +49,23 @@ def run_csv_process(email, password, ruta_csv, log_fn=None):
                 driver.get(url)
                 time.sleep(random.uniform(5, 7))
 
-                # Paso 1: Clic en 'Conectar' (directo o vía menú 'Más')
-                conectado = buscar_y_clicar_js(driver, ["conectar", "connect"])
+                # Guardia: saltar si ya estamos conectados o las conexiones están desactivadas
+                saltar, motivo = debe_saltar_perfil(driver)
+                if saltar:
+                    if log_fn:
+                        log_fn(f"Saltando a {nombre}: {motivo}.")
+                    continue
+
+                # Paso 1: Clic en 'Conectar' con coincidencia EXACTA para no
+                # confundirse con textos de publicaciones que contengan esa palabra
+                conectado = buscar_y_clicar_js(driver, ["conectar", "connect"], exacto=True)
 
                 if not conectado:
                     if log_fn:
                         log_fn("Buscando en menú 'Más'...")
                     if buscar_y_clicar_js(driver, ["más...", "more...", "más"]):
                         time.sleep(1.5)
-                        conectado = buscar_y_clicar_js(driver, ["conectar", "connect"])
+                        conectado = buscar_y_clicar_js(driver, ["conectar", "connect"], exacto=True)
 
                 # Paso 2: Confirmación final por navegación TAB
                 if conectado:
