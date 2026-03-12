@@ -6,12 +6,13 @@ from core.people_search import run_people_search
 
 
 class PeopleFrame(ctk.CTkFrame):
-    def __init__(self, parent, get_credentials_fn, get_save_dir_fn, log_fn, **kwargs):
+    def __init__(self, parent, get_credentials_fn, get_save_dir_fn, log_fn, stop_event, **kwargs):
         super().__init__(parent, fg_color="transparent", **kwargs)
 
         self._get_credentials = get_credentials_fn
         self._get_save_dir = get_save_dir_fn
         self._log = log_fn
+        self._stop_event = stop_event
 
         # --- Título ---
         ctk.CTkLabel(self, text="Find People on LinkedIn",
@@ -40,23 +41,28 @@ class PeopleFrame(ctk.CTkFrame):
 
         # --- Botón de ejecución ---
         ctk.CTkButton(self, text="Extraer Perfiles", height=40,
-                      command=lambda: threading.Thread(
-                          target=self._run, daemon=True
-                      ).start()).pack(pady=10)
+                      command=self._iniciar).pack(pady=10)
 
     def _update_pages_label(self, valor):
         self.label_pages.configure(text=f"Pages to extract: {int(valor)}")
 
+    def _iniciar(self):
+        self.winfo_toplevel().set_proceso_activo(True)
+        threading.Thread(target=self._run, daemon=True).start()
+
     def _run(self):
-        keyword = self.entry_search.get()
-        paginas = int(self.slider_pages.get())
-        email, password = self._get_credentials()
+        try:
+            keyword = self.entry_search.get()
+            paginas = int(self.slider_pages.get())
+            email, password = self._get_credentials()
 
-        if not email or not password:
-            self._log("Error: Configura tus credenciales primero.")
-            return
+            if not email or not password:
+                self._log("Error: Configura tus credenciales primero.")
+                return
 
-        run_people_search(
-            email, password, keyword, paginas,
-            self._get_save_dir(), log_fn=self._log
-        )
+            run_people_search(
+                email, password, keyword, paginas,
+                self._get_save_dir(), log_fn=self._log, stop_event=self._stop_event
+            )
+        finally:
+            self.winfo_toplevel().set_proceso_activo(False)

@@ -8,11 +8,15 @@ from selenium.webdriver.common.action_chains import ActionChains
 from core.browser import iniciar_driver, login_proceso, buscar_y_clicar_js, debe_saltar_perfil
 
 
-def run_csv_process(email, password, ruta_csv, log_fn=None):
+def run_csv_process(email, password, ruta_csv, log_fn=None, stop_event=None):
     """
     Proceso principal de conexión masiva desde un archivo CSV.
     Cada fila debe tener una columna de URL y opcionalmente de nombre.
+    stop_event: threading.Event — si se activa, el proceso para limpiamente.
     """
+    def parado():
+        return stop_event is not None and stop_event.is_set()
+
     if log_fn:
         log_fn("Iniciando navegador para conectar...")
 
@@ -31,6 +35,11 @@ def run_csv_process(email, password, ruta_csv, log_fn=None):
             reader = csv.DictReader(f)
 
             for fila in reader:
+                if parado():
+                    if log_fn:
+                        log_fn("Proceso detenido por el usuario.")
+                    break
+
                 if not any(fila.values()):
                     continue
 
@@ -49,6 +58,11 @@ def run_csv_process(email, password, ruta_csv, log_fn=None):
                 driver.get(url)
                 time.sleep(random.uniform(5, 7))
 
+                if parado():
+                    if log_fn:
+                        log_fn("Proceso detenido por el usuario.")
+                    break
+
                 # Guardia: saltar si ya estamos conectados o las conexiones están desactivadas
                 saltar, motivo = debe_saltar_perfil(driver)
                 if saltar:
@@ -56,8 +70,7 @@ def run_csv_process(email, password, ruta_csv, log_fn=None):
                         log_fn(f"Saltando a {nombre}: {motivo}.")
                     continue
 
-                # Paso 1: Clic en 'Conectar' con coincidencia EXACTA para no
-                # confundirse con textos de publicaciones que contengan esa palabra
+                # Paso 1: Clic en 'Conectar' con coincidencia EXACTA
                 conectado = buscar_y_clicar_js(driver, ["conectar", "connect"], exacto=True)
 
                 if not conectado:
@@ -98,10 +111,19 @@ def run_csv_process(email, password, ruta_csv, log_fn=None):
 
                     time.sleep(4)
 
+                if parado():
+                    if log_fn:
+                        log_fn("Proceso detenido por el usuario.")
+                    break
+
                 espera = random.uniform(10, 18)
                 if log_fn:
                     log_fn(f"Esperando {int(espera)}s para el siguiente...")
-                time.sleep(espera)
+                # Espera interrumpible: comprueba stop_event cada segundo
+                for _ in range(int(espera)):
+                    if parado():
+                        break
+                    time.sleep(1)
 
         if log_fn:
             log_fn("Proceso de CSV finalizado.")

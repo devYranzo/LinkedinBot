@@ -8,12 +8,13 @@ from core.connector import run_csv_process
 
 
 class ConnectFrame(ctk.CTkFrame):
-    def __init__(self, parent, get_credentials_fn, get_save_dir_fn, log_fn, **kwargs):
+    def __init__(self, parent, get_credentials_fn, get_save_dir_fn, log_fn, stop_event, **kwargs):
         super().__init__(parent, fg_color="transparent", **kwargs)
 
         self._get_credentials = get_credentials_fn
         self._get_save_dir = get_save_dir_fn
         self._log = log_fn
+        self._stop_event = stop_event
         self.csv_path = None
 
         # --- Título ---
@@ -38,9 +39,7 @@ class ConnectFrame(ctk.CTkFrame):
         # --- Botón de ejecución ---
         ctk.CTkButton(self, text="Start Processing", height=40,
                       font=ctk.CTkFont(weight="bold"),
-                      command=lambda: threading.Thread(
-                          target=self._run, daemon=True
-                      ).start()).pack(pady=30)
+                      command=self._iniciar).pack(pady=30)
 
     def _load_csv(self):
         path = filedialog.askopenfilename(
@@ -57,11 +56,19 @@ class ConnectFrame(ctk.CTkFrame):
             self.entry_csv_path.configure(state="readonly")
             self._log(f"Archivo cargado: {os.path.basename(path)}")
 
-    def _run(self):
-        ruta = self.entry_csv_path.get()
-        if not ruta or not os.path.exists(ruta):
-            self._log("Error: Selecciona un archivo CSV válido.")
-            return
+    def _iniciar(self):
+        # Notificar a la app que hay un proceso activo (activa el botón Stop)
+        self.winfo_toplevel().set_proceso_activo(True)
+        threading.Thread(target=self._run, daemon=True).start()
 
-        email, password = self._get_credentials()
-        run_csv_process(email, password, ruta, log_fn=self._log)
+    def _run(self):
+        try:
+            ruta = self.entry_csv_path.get()
+            if not ruta or not os.path.exists(ruta):
+                self._log("Error: Selecciona un archivo CSV válido.")
+                return
+
+            email, password = self._get_credentials()
+            run_csv_process(email, password, ruta, log_fn=self._log, stop_event=self._stop_event)
+        finally:
+            self.winfo_toplevel().set_proceso_activo(False)

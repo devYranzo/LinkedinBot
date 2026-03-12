@@ -9,10 +9,14 @@ from selenium.webdriver.common.by import By
 from core.browser import iniciar_driver, login_proceso
 
 
-def run_people_search(email, password, keyword, paginas, ruta_guardado, log_fn=None):
+def run_people_search(email, password, keyword, paginas, ruta_guardado, log_fn=None, stop_event=None):
     """
     Busca perfiles de personas en LinkedIn y guarda los resultados en un CSV.
+    stop_event: threading.Event — si se activa, el proceso para limpiamente.
     """
+    def parado():
+        return stop_event is not None and stop_event.is_set()
+
     driver = iniciar_driver()
     if not driver:
         return
@@ -25,6 +29,11 @@ def run_people_search(email, password, keyword, paginas, ruta_guardado, log_fn=N
         enlaces_vistos = set()
 
         for p in range(1, paginas + 1):
+            if parado():
+                if log_fn:
+                    log_fn("Proceso detenido por el usuario.")
+                break
+
             url = (f"https://www.linkedin.com/search/results/people/?"
                    f"keywords={urllib.parse.quote(keyword)}&page={p}")
 
@@ -41,6 +50,8 @@ def run_people_search(email, password, keyword, paginas, ruta_guardado, log_fn=N
                 log_fn(f"Detectados {len(items)} elementos en la página.")
 
             for item in items:
+                if parado():
+                    break
                 try:
                     enlace_el = item.find_element(
                         By.CSS_SELECTOR, "a[data-view-name='search-result-lockup-title']"

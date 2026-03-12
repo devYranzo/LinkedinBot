@@ -9,11 +9,14 @@ from config import GEOIDS
 from core.browser import iniciar_driver, login_proceso
 
 
-def run_job_search(email, password, job_key, pais_seleccionado, save_callback, log_fn=None):
+def run_job_search(email, password, job_key, pais_seleccionado, save_callback, log_fn=None, stop_event=None):
     """
-    Busca vacantes de empleo en LinkedIn y devuelve los resultados
-    al caller a través de save_callback(df) para que la UI gestione el guardado.
+    Busca vacantes de empleo en LinkedIn.
+    stop_event: threading.Event — si se activa, el proceso para limpiamente.
     """
+    def parado():
+        return stop_event is not None and stop_event.is_set()
+
     driver = iniciar_driver()
     if not driver:
         return
@@ -38,7 +41,12 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
         driver.get(url_busqueda)
         time.sleep(5)
 
-        # Scroll dinámico en el panel de resultados
+        if parado():
+            if log_fn:
+                log_fn("Proceso detenido por el usuario.")
+            return
+
+        # Scroll dinámico
         try:
             panel = None
             for selector in [".jobs-search-results-list", ".scaffold-layout__list-container", "main"]:
@@ -51,12 +59,19 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
 
             if panel:
                 for i in range(5):
+                    if parado():
+                        break
                     if log_fn:
                         log_fn(f"Scroll en panel de resultados ({i + 1}/5)...")
                     driver.execute_script("arguments[0].scrollTop += 1000;", panel)
                     time.sleep(1.5)
         except Exception:
             pass
+
+        if parado():
+            if log_fn:
+                log_fn("Proceso detenido por el usuario.")
+            return
 
         cards = driver.find_elements(By.XPATH, "//div[contains(@class, 'job-card-container')]")
         if log_fn:
@@ -66,6 +81,11 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
         palabras_basura = ["Inicio", "Notificaciones", "Mensajes", "Mi red", "Empleos", "Premium"]
 
         for card in cards:
+            if parado():
+                if log_fn:
+                    log_fn("Proceso detenido por el usuario.")
+                break
+
             try:
                 driver.execute_script("arguments[0].scrollIntoView();", card)
                 card.click()
@@ -78,7 +98,6 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
                 empresa = lineas[2] if len(lineas) > 2 else "N/A"
                 ubicacion_texto = lineas[3] if len(lineas) > 3 else "N/A"
 
-                # Reclutador
                 reclutador = "Anónimo"
                 try:
                     reclutador_el = driver.find_element(
@@ -88,7 +107,6 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
                 except Exception:
                     pass
 
-                # Email en descripción
                 email_detectado = "No encontrado"
                 try:
                     descripcion = driver.find_element(By.ID, "job-details").text
@@ -98,7 +116,6 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
                 except Exception:
                     pass
 
-                # Modalidad de trabajo
                 modalidad = "No especificada"
                 try:
                     info_empleo = driver.find_element(
@@ -129,7 +146,6 @@ def run_job_search(email, password, job_key, pais_seleccionado, save_callback, l
             except Exception:
                 continue
 
-        # Procesamiento y entrega al callback de la UI
         if resultados:
             df = pd.DataFrame(resultados).drop_duplicates(subset=['Link'])
             if pais_seleccionado != "Reino Unido":

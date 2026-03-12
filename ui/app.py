@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 
 import customtkinter as ctk
 
@@ -20,6 +21,9 @@ class LinkedInBotApp(ctk.CTk):
         # Cargar configuración persistida
         email_guardado, ruta_guardado = cargar_configuracion()
         password_guardada = obtener_password_guardada(email_guardado)
+
+        # ── Evento de parada compartido entre todos los procesos ──—──────────
+        self.stop_event = threading.Event()
 
         # --- Grid principal ---
         self.grid_columnconfigure(0, minsize=250)
@@ -59,7 +63,7 @@ class LinkedInBotApp(ctk.CTk):
         self.right_container.grid_rowconfigure(0, weight=1)
         self.right_container.grid_columnconfigure(0, weight=1)
 
-        # ── CONFIG FRAME (necesario primero para exponer get_credentials) ────
+        # ── CONFIG FRAME ─────────────────────────────────────────────────────
         self.config_frame = ConfigFrame(
             self.right_container,
             email_inicial=email_guardado,
@@ -74,18 +78,21 @@ class LinkedInBotApp(ctk.CTk):
             get_credentials_fn=self.config_frame.get_credentials,
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
+            stop_event=self.stop_event,
         )
         self.people_frame = PeopleFrame(
             self.right_container,
             get_credentials_fn=self.config_frame.get_credentials,
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
+            stop_event=self.stop_event,
         )
         self.jobs_frame = JobsFrame(
             self.right_container,
             get_credentials_fn=self.config_frame.get_credentials,
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
+            stop_event=self.stop_event,
         )
 
         self._all_frames = {
@@ -95,11 +102,24 @@ class LinkedInBotApp(ctk.CTk):
             "config":  self.config_frame,
         }
 
-        # ── TERMINAL ─────────────────────────────────────────────────────────
+        # ── TERMINAL + BOTÓN STOP ─────────────────────────────────────────────
+        terminal_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
+        terminal_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        terminal_frame.grid_columnconfigure(0, weight=1)
+
         self.terminal = ctk.CTkTextbox(
-            self.right_container, height=200, border_width=1, state="disabled"
+            terminal_frame, height=200, border_width=1, state="disabled"
         )
-        self.terminal.grid(row=1, column=0, sticky="ew", pady=(10, 0))
+        self.terminal.grid(row=0, column=0, sticky="ew")
+
+        self.btn_stop = ctk.CTkButton(
+            terminal_frame, text="⏹  Stop", height=36,
+            fg_color="#c0392b", hover_color="#922b21",
+            font=ctk.CTkFont(weight="bold"),
+            state="disabled",
+            command=self._parar_proceso,
+        )
+        self.btn_stop.grid(row=1, column=0, sticky="e", pady=(6, 0))
 
         self.select_frame("connect")
 
@@ -112,6 +132,20 @@ class LinkedInBotApp(ctk.CTk):
             frame.grid_forget()
 
         self._all_frames[name].grid(row=0, column=0, sticky="nsew")
+
+    # ── Control de parada ─────────────────────────────────────────────────────
+    def _parar_proceso(self):
+        self.stop_event.set()
+        self.escribir_log("⏹ Señal de parada enviada. Finalizando tras el paso actual...")
+        self.btn_stop.configure(state="disabled")
+
+    def set_proceso_activo(self, activo: bool):
+        """Llamado por los frames al iniciar/terminar un proceso."""
+        if activo:
+            self.stop_event.clear()
+            self.btn_stop.configure(state="normal")
+        else:
+            self.btn_stop.configure(state="disabled")
 
     # ── Terminal de log ───────────────────────────────────────────────────────
     def escribir_log(self, mensaje):
