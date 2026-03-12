@@ -1,4 +1,3 @@
-import os
 import time
 import threading
 
@@ -16,7 +15,7 @@ class LinkedInBotApp(ctk.CTk):
         super().__init__()
 
         self.title("LinkedIn Bot")
-        self.geometry("1100x750")
+        self.geometry("1000x600")
 
         # Cargar configuración persistida
         email_guardado, ruta_guardado = cargar_configuracion()
@@ -49,8 +48,8 @@ class LinkedInBotApp(ctk.CTk):
             icon = cargar_icono(icon_name)
             btn = ctk.CTkButton(
                 self.sidebar_frame, text=label,
-                text_color=("black", "white"), anchor="w",
-                fg_color="transparent", hover_color="#333333",
+                text_color=("#333333", "white"), anchor="w",
+                fg_color="transparent", hover_color=("#CCCCCC", "#333333"),
                 height=40, cursor="hand2", image=icon,
                 command=lambda n=name: self.select_frame(n)
             )
@@ -79,6 +78,7 @@ class LinkedInBotApp(ctk.CTk):
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
             stop_event=self.stop_event,
+            stop_fn=self._parar_proceso,
         )
         self.people_frame = PeopleFrame(
             self.right_container,
@@ -86,6 +86,7 @@ class LinkedInBotApp(ctk.CTk):
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
             stop_event=self.stop_event,
+            stop_fn=self._parar_proceso,
         )
         self.jobs_frame = JobsFrame(
             self.right_container,
@@ -93,6 +94,7 @@ class LinkedInBotApp(ctk.CTk):
             get_save_dir_fn=self.config_frame.get_save_dir,
             log_fn=self.escribir_log,
             stop_event=self.stop_event,
+            stop_fn=self._parar_proceso,
         )
 
         self._all_frames = {
@@ -102,31 +104,24 @@ class LinkedInBotApp(ctk.CTk):
             "config":  self.config_frame,
         }
 
-        # ── TERMINAL + BOTÓN STOP ─────────────────────────────────────────────
+        # ── TERMINAL ───────────────────────────────────────────────────────────
         terminal_frame = ctk.CTkFrame(self.right_container, fg_color="transparent")
         terminal_frame.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         terminal_frame.grid_columnconfigure(0, weight=1)
 
         self.terminal = ctk.CTkTextbox(
-            terminal_frame, height=200, border_width=1, state="disabled"
+            terminal_frame, height=150, border_width=1, state="disabled"
         )
         self.terminal.grid(row=0, column=0, sticky="ew")
 
-        self.btn_stop = ctk.CTkButton(
-            terminal_frame, text="⏹  Stop", height=36,
-            fg_color="#c0392b", hover_color="#922b21",
-            font=ctk.CTkFont(weight="bold"),
-            state="disabled",
-            command=self._parar_proceso,
-        )
-        self.btn_stop.grid(row=1, column=0, sticky="e", pady=(6, 0))
 
         self.select_frame("connect")
 
     # ── Navegación ────────────────────────────────────────────────────────────
     def select_frame(self, name):
         for key, btn in self._nav_buttons.items():
-            btn.configure(fg_color="#333333" if key == name else "transparent")
+            color_seleccionado = ("#CCCCCC", "#333333") if key == name else "transparent"
+            btn.configure(fg_color=color_seleccionado)
 
         for frame in self._all_frames.values():
             frame.grid_forget()
@@ -137,15 +132,12 @@ class LinkedInBotApp(ctk.CTk):
     def _parar_proceso(self):
         self.stop_event.set()
         self.escribir_log("⏹ Señal de parada enviada. Finalizando tras el paso actual...")
-        self.btn_stop.configure(state="disabled")
 
     def set_proceso_activo(self, activo: bool):
         """Llamado por los frames al iniciar/terminar un proceso."""
         if activo:
             self.stop_event.clear()
-            self.btn_stop.configure(state="normal")
-        else:
-            self.btn_stop.configure(state="disabled")
+        # El botón Stop es manejado por cada frame individualmente
 
     # ── Terminal de log ───────────────────────────────────────────────────────
     def escribir_log(self, mensaje):

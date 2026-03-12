@@ -6,7 +6,7 @@ import customtkinter as ctk
 from utils.helpers import guardar_configuracion
 
 
-class ConfigFrame(ctk.CTkFrame):
+class ConfigFrame(ctk.CTkScrollableFrame):
     def __init__(self, parent, email_inicial, password_inicial, ruta_inicial, log_fn, **kwargs):
         super().__init__(parent, fg_color="transparent", **kwargs)
 
@@ -14,7 +14,7 @@ class ConfigFrame(ctk.CTkFrame):
 
         # --- Título de credenciales ---
         ctk.CTkLabel(self, text="LinkedIn Account",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(fill="x", pady=(20, 10))
+                     font=ctk.CTkFont(size=20, weight="bold")).pack(fill="x", pady=(10, 10))
 
         form = ctk.CTkFrame(self, fg_color="transparent")
         form.pack(pady=10)
@@ -33,9 +33,12 @@ class ConfigFrame(ctk.CTkFrame):
         )
         self.entry_pass.pack(pady=(5, 15))
 
+        # --- Botón guardar ---
+        ctk.CTkButton(form, text="Save", height=40, command=self._guardar).pack(pady=10)
+
         # --- Título de directorio ---
         ctk.CTkLabel(form, text="Saves Directory Location",
-                     font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(20, 10), fill="x")
+                     font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(10, 10), fill="x")
         ctk.CTkLabel(form, text="Save file on:", anchor="w").pack(fill="x", padx=5)
 
         folder_frame = ctk.CTkFrame(form, fg_color="transparent")
@@ -48,10 +51,6 @@ class ConfigFrame(ctk.CTkFrame):
 
         ctk.CTkButton(folder_frame, text="Examine...", width=80, height=40, cursor="hand2",
                       command=self._seleccionar_carpeta).pack(side="left")
-
-        # --- Botón guardar ---
-        ctk.CTkButton(form, text="Save Settings", height=45, fg_color="#0077B5",
-                      command=self._guardar).pack(pady=30)
 
         # Prellenar campos con datos guardados
         self.entry_email.insert(0, email_inicial)
